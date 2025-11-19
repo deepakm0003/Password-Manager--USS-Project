@@ -1,0 +1,75 @@
+{
+  "expo": {
+    "name": "Unified Authentication Manager",
+    "slug": "unified-auth-manager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#6366f1"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.unifiedauth.manager",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Allow Unified Authentication Manager to use Face ID to securely access your vault."
+      },
+      "buildNumber": "1.0.0"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#6366f1",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "package": "com.unifiedauth.manager",
+      "versionCode": 1,
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "BIND_AUTOFILL_SERVICE",
+        "BIND_ACCESSIBILITY_SERVICE"
+      ],
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "android.service.autofill.AutofillService",
+          "category": ["android.intent.category.DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Unified Authentication Manager to use Face ID."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#6366f1",
+          "sounds": ["./assets/notification-sound.wav"]
+        }
+      ]
+    ],
+    "sdkVersion": "54.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "unified-auth-manager"
+      }
+    }
+  }
+}

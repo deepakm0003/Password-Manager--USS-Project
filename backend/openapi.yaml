@@ -1,0 +1,683 @@
+openapi: 3.0.3
+info:
+  title: Unified Authentication Manager API
+  description: |
+    Production-ready backend API for Unified Authentication Manager.
+    
+    Features:
+    - Zero-knowledge vault (client-side encryption)
+    - Device-based MFA with cryptographic signatures
+    - Email relay with encrypted routing
+    - JWT authentication with refresh tokens
+    - Rate limiting and security headers
+  version: 1.0.0
+  contact:
+    name: UAM API Support
+    url: https://api.uam.example
+
+servers:
+  - url: https://api.uam.example/api/v1
+    description: Production server
+  - url: http://localhost:5000/api/v1
+    description: Local development server
+
+tags:
+  - name: auth
+    description: Authentication endpoints
+  - name: devices
+    description: Device registration and management
+  - name: vault
+    description: Zero-knowledge vault operations
+  - name: mfa
+    description: Multi-factor authentication requests
+  - name: aliases
+    description: Email alias management
+  - name: relay
+    description: Email relay webhook
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+
+    RegisterRequest:
+      type: object
+      required: [email, password, masterKeySalt, masterKeyParams, kdfIterations]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+        masterKeySalt:
+          type: string
+          minLength: 16
+        masterKeyParams:
+          type: object
+        kdfIterations:
+          type: integer
+          minimum: 100000
+          maximum: 600000
+          default: 200000
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    DeviceRegisterRequest:
+      type: object
+      required: [name, publicKey, platform]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        publicKey:
+          type: string
+          description: Base64-encoded Ed25519 or secp256k1 public key
+        keyAlgorithm:
+          type: string
+          enum: [ed25519, secp256k1]
+          default: ed25519
+        fcmTokenCipher:
+          type: string
+          description: Encrypted FCM token
+        platform:
+          type: string
+          enum: [android, ios, web, desktop]
+        appVersion:
+          type: string
+
+    VaultEntry:
+      type: object
+      required: [ciphertext, nonce, metadata]
+      properties:
+        ciphertext:
+          type: string
+          description: AES-256-GCM encrypted blob (base64)
+        nonce:
+          type: string
+        authTag:
+          type: string
+        metadata:
+          type: object
+
+    MfaRequestRequest:
+      type: object
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        payload:
+          type: object
+          description: Non-secret metadata about the request
+
+    MfaResponseRequest:
+      type: object
+      required: [mfaRequestId, signature, decision, timestamp]
+      properties:
+        mfaRequestId:
+          type: string
+          format: uuid
+        signature:
+          type: string
+          description: Base64-encoded signature of challenge
+        decision:
+          type: string
+          enum: [approve, deny]
+        timestamp:
+          type: integer
+          format: int64
+
+    AliasCreateRequest:
+      type: object
+      properties:
+        routingMode:
+          type: string
+          enum: [DIRECT, HMAC_LOOKUP]
+          default: DIRECT
+        targetCiphertext:
+          type: string
+          description: Encrypted destination email (required for DIRECT)
+        targetHmac:
+          type: string
+          description: HMAC for lookup (required for HMAC_LOOKUP)
+        hmacKeyVersion:
+          type: integer
+          minimum: 1
+
+paths:
+  /health:
+    get:
+      tags: []
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /metrics:
+    get:
+      tags: []
+      summary: Prometheus metrics endpoint
+      responses:
+        '200':
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  sessionId:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout and revoke session
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /devices:
+    get:
+      tags: [devices]
+      summary: List user devices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [devices]
+      summary: Register new device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegisterRequest'
+      responses:
+        '201':
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  device:
+                    type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /devices/{id}:
+    delete:
+      tags: [devices]
+      summary: Revoke device
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Device revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vault:
+    get:
+      tags: [vault]
+      summary: List vault entries
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of vault entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VaultEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [vault]
+      summary: Create vault entry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultEntry'
+      responses:
+        '201':
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/VaultEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vault/{id}:
+    put:
+      tags: [vault]
+      summary: Update vault entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VaultEntry'
+      responses:
+        '200':
+          description: Entry updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/VaultEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [vault]
+      summary: Delete vault entry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Entry deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /mfa/request:
+    post:
+      tags: [mfa]
+      summary: Create MFA request
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaRequestRequest'
+      responses:
+        '201':
+          description: MFA request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /mfa/response:
+    post:
+      tags: [mfa]
+      summary: Submit MFA response with signature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaResponseRequest'
+      responses:
+        '200':
+          description: MFA response processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /aliases:
+    get:
+      tags: [aliases]
+      summary: List email aliases
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of aliases
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aliases:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [aliases]
+      summary: Create email alias
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AliasCreateRequest'
+      responses:
+        '201':
+          description: Alias created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alias:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /aliases/{id}:
+    delete:
+      tags: [aliases]
+      summary: Revoke email alias
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Alias revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /relay/inbound:
+    post:
+      tags: [relay]
+      summary: Inbound email webhook
+      description: |
+        Receives inbound emails from mail provider.
+        Requires valid HMAC signature in X-Relay-Signature header.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aliasEmail, from]
+              properties:
+                aliasEmail:
+                  type: string
+                  format: email
+                from:
+                  type: string
+                subject:
+                  type: string
+                text:
+                  type: string
+                html:
+                  type: string
+                headers:
+                  type: object
+      responses:
+        '202':
+          description: Email relay enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+
+

@@ -1,0 +1,127 @@
+name: backend-ci
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "backend/**"
+  pull_request:
+    paths:
+      - "backend/**"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uam_ci?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_PRIVATE_KEY: |
+        -----BEGIN PRIVATE KEY-----
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC0testKeykz5m
+        0oMULA+9v8nVwVldtxB7F5usGZWlznImPi0tLxe3Ljpsp8dkUBaRdFVH3QG5Iw+p
+        siUKt2v3pAkqkFbwBp4zK8V0w5Xtt1Yb4nJB7d0pV9LqFeW9j7gxn7oL4Avc4S5g
+        7U0hwZ85Zy1JfN+g2+9iCJn82EA1UpykvGkuyz7+xGkLx3DKptZBzdc9FftEJulB
+        sHgBvzXz0Ju1u6rXFR5j4k9pBAKxtkMT6l83z2V7B7MU0n0QIqpGZPKzdgI9CvWJ
+        5HQHt5qX8vZxG4Tez0kYpMfP7SBd7y52DkPcLq6OT1MgE7rsm3m0nZikFJZy0hF8
+        ePeUkzP9AgMBAAECggEAQlt9DemoKey9pR2b9sErG2pqKc6lFrVsF9P5Q3bM0fVK
+        HFNn4gITttestKeyzwtb5kkS7ZioawMFh5Wv8WgVznz0k3pAso8mNGaRPwEomLZZ
+        L4h4zSqSWFMJf9Q6iP5suzFq8+vHkv1JH3i2Ko41xH4dPTVX2I6oEeb0AlQDYOXg
+        zG7q1URV9VbmzAGEgS1QXl3UYmd2vrM5hAhOj8T1A8TWjMbF0W1tc9H0PNN+MPYJ
+        GxkHzxFFUYFtemsL7O0L2P/1PbkYK3RpuxfL/ep0/nPqctZjHWF0kT0pE5CukqGn
+        fbeNFk6XZO79a4mWIBc1LHSat6gHNxK9uZWulJ0gLQKBgQDgtestKeyQnDFv+1MS
+        4Qup22dxbQg6m+5Y7Znwzspx4tA6Y2PHS6O7QBuORjn5QAKn79UAwzEt1DT1wpMz
+        VfG3pFGWZnqXqH1p4EynZAzob9s4p55gRpVXSw/7fqsW55QtrsuJp2gKNb5Ywrdo
+        X4Xbp2T0kQwCkE8M2S2IpzmdBwKBgQC5testKeyBBzozev6ryOw0Z7U2ktDYGSSH
+        gHRiVYqWBXfGbn6KXun7JwQ7WXBmwrU6vsVy1fM92gOhHk0pVv5x9CX5BL6rluM4
+        ftn2szRjF0ievcePjG5mIY7iKcAgUZ1hqeKXoKm8iPPQF07yfvLhGKQFD7B85fGk
+        bnpS4bOVHwKBgQCJtestKey8sAgns6n2aqx2BPDRw7LAmjzqnNVbRk+joLZ/rJx6
+        eKomsbaUO/En67URaCDHjd+DuxstkM5dzrn9U4xl7NzGQA4VtQkXU6hnyANqaIxY
+        T7Q9nk/shU99n7zQE8q0JXKwX5aZ+rmWGenL6kEyKX9rXQ8l1AwQooOWnwKBgEyt
+        estKeyf6kXTxI3S0nDdq0MRHPC2h4Uw6nGZ2SRiu4a+IsqG/vgq0w6CmcClw7N/
+        TMS6soVdXwN2UQKblB6Pn8FTYbz4xKX1LYBnNHYnzKoGI2shmyXtQkV9nFVG5opX
+        1uB3gG4Stkf70z+CpN/viqJ2zyVh71Zvw7TI5vhVAoGBAMrrtestKeySv6pFEQ1H
+        0thaSGVAvhZVdTBzWc4+lDf9LmmRdbVYErhhUoB8/1QXW7awQ99YN7kJYVSz6l0X
+        XTOcByJ/4pwoni4x0ZtPmrx98XHVi9j3DbveKjC3eUb4qEoHhhppQ7BssAFJHxbv
+        PNWbAdv1A6H/mEUppIWGjXL3
+        -----END PRIVATE KEY-----
+      JWT_PUBLIC_KEY: |
+        -----BEGIN PUBLIC KEY-----
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtHZXZXN0S2V5kz5m0oMU
+        LA+9v8nVwVldtxB7F5usGZWlznImPi0tLxe3Ljpsp8dkUBaRdFVH3QG5Iw+psiUK
+        t2v3pAkqkFbwBp4zK8V0w5Xtt1Yb4nJB7d0pV9LqFeW9j7gxn7oL4Avc4S5g7U0h
+        wZ85Zy1JfN+g2+9iCJn82EA1UpykvGkuyz7+xGkLx3DKptZBzdc9FftEJulBsHgB
+        vzXz0Ju1u6rXFR5j4k9pBAKxtkMT6l83z2V7B7MU0n0QIqpGZPKzdgI9CvWJ5HQH
+        t5qX8vZxG4Tez0kYpMfP7SBd7y52DkPcLq6OT1MgE7rsm3m0nZikFJZy0hF8ePeU
+        kzP9wQIDAQAB
+        -----END PUBLIC KEY-----
+      ENCRYPTION_KEY: 7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Prepare database
+        run: |
+          psql postgresql://postgres:postgres@localhost:5432/postgres -c "CREATE DATABASE uam_ci;"
+      - name: Run migrations
+        run: npm run migrate:deploy
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        if: secrets.GHCR_TOKEN != '' && secrets.GHCR_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: ${{ secrets.GHCR_TOKEN != '' && secrets.GHCR_USERNAME != '' }}
+          tags: ghcr.io/${{ github.repository_owner }}/uam-backend:${{ github.sha }}
+
